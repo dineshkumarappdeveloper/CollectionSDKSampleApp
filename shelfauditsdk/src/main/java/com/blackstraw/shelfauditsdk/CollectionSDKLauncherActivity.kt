@@ -50,15 +50,14 @@ class CollectionSDKLauncherActivity : ComponentActivity() {
                                 Text("Click me")
 
                             }
+
+                            //Enable this to check the AR Scene View
                             ARSceneView()
-//                        // Show the bitmap in ImageView
-//                        bitmap?.let {
-//                            Image(
-//                                bitmap = it.asImageBitmap(),
-//                                contentDescription = null,
-//                                modifier = Modifier.fillMaxSize()
-//                            )
-//                        }
+
+                            //Enable to check the modified bitmap and confirm object detection model is working
+                            bitmap?.asImageBitmap()?.let {
+                                Image(bitmap = it, contentDescription = "Modified Bitmap")
+                            }
 
                         }
                     }

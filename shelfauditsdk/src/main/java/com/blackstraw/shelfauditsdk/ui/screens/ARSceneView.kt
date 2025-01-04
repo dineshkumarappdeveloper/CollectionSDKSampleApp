@@ -1,36 +1,33 @@
 package com.blackstraw.shelfauditsdk.ui.screens
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import io.github.sceneview.ar.ARScene
-
-import com.blackstraw.shelfauditsdk.ml.MLModelHandler
 import com.blackstraw.shelfauditsdk.utils.ARPoints
 import com.blackstraw.shelfauditsdk.utils.ShakeDetector
-import com.blackstraw.shelfauditsdk.utils.createGeometryNodeFromBoundingBox
 import com.blackstraw.shelfauditsdk.utils.getCurrentFrameAsBitmap
 import com.blackstraw.shelfauditsdk.utils.isLowLighting
 import com.blackstraw.shelfauditsdk.utils.isTilted
 import com.blackstraw.shelfauditsdk.utils.isTooClose
 import com.blackstraw.shelfauditsdk.utils.isTooFar
 import com.blackstraw.shelfauditsdk.viewModels.ARViewModel
-import com.google.android.filament.RenderableManager
+import com.google.android.filament.Engine
+import com.google.android.filament.IndexBuffer
+import com.google.android.filament.VertexBuffer
 import com.google.ar.core.Config
-import dev.romainguy.kotlin.math.Float3
+import io.github.sceneview.ar.ARScene
 import io.github.sceneview.ar.node.ARCameraNode
 import io.github.sceneview.ar.rememberARCameraStream
-import io.github.sceneview.math.Position
-import io.github.sceneview.node.GeometryNode
+import io.github.sceneview.ar.scene.PlaneRenderer
 import io.github.sceneview.rememberCollisionSystem
 import io.github.sceneview.rememberEngine
 import io.github.sceneview.rememberEnvironmentLoader
@@ -41,9 +38,8 @@ import io.github.sceneview.rememberNodes
 import io.github.sceneview.rememberRenderer
 import io.github.sceneview.rememberScene
 import io.github.sceneview.rememberView
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 
 @Composable
@@ -64,6 +60,11 @@ fun ARSceneView() {
 
         val arViewModel = remember { ARViewModel() }
         val boundingBoxList  = arViewModel.listBoundingBoxes.collectAsState(emptyList())
+
+
+        val modelNode =  remember {
+            mutableStateOf<ARCameraNode?>(null)
+        }
 
         val arPointList = mutableListOf<ARPoints>()
 
@@ -125,7 +126,8 @@ fun ARSceneView() {
                 val bitmap = getCurrentFrameAsBitmap(updatedFrame)
                 if (bitmap != null) {
                     val boundingBoxes = boundingBoxList.value
-                    val maxDepth = 2.0f
+
+
 
                     val materialInstance = materialLoader.createColorInstance(
                         color = Color.Blue,
@@ -134,41 +136,44 @@ fun ARSceneView() {
                         reflectance = 0.0f
                     )
 
-                    for (boundingBox in boundingBoxes) {
-
-                        val shape = createGeometryNodeFromBoundingBox(
-                            engine,
-                            boundingBox,
-                            null
-                        )
-                        val centerX = (boundingBox.x1 + boundingBox.x2) / 2
-                        val centerY = (boundingBox.y1 + boundingBox.y2) / 2
-
-                        val hitResult = updatedFrame.hitTest(centerX, centerY)
-
-
-                        if (hitResult.isNotEmpty()) {
-                            val hitPose = hitResult[0].hitPose
-                            var anchor = session.createAnchor(hitPose)
-
-
-                            val geometryNode = GeometryNode(
-                                engine = engine,
-                                geometry = shape.geometry,
-                                materialInstance = materialInstance,
-                            ).apply {
-                                position = Position(hitPose.tx(), hitPose.ty(), hitPose.tz())
-                                rotation = Float3(hitPose.rotationQuaternion.get(0))
-                                scale = Float3(1.0f, 1.0f, 1.0f)
-                            }
-
-                            nodes.add(geometryNode)
-                        }
-
-
-                    }
-
-                    arViewModel.getBoundingBoxes(bitmap)
+//                    for (boundingBox in boundingBoxes) {
+//
+//                        val shape = createGeometryNodeFromBoundingBox(
+//                            engine,
+//                            boundingBox,
+//                            null
+//                        )
+//
+//                        val aabb = createBoxFromBoundingBox(boundingBox)
+//
+////                         val renderableManager: RenderableManager.Builder.() -> Unit = {
+////                            boundingBox(aabb)
+////                        }
+//
+//                        val faceVertexBuffer = createVertexBuffer(engine)
+//                        val faceIndexBuffer = createIndexBuffer(engine)
+//
+//
+//                     val renderableManager: RenderableManager.Builder.() -> Unit = {
+//                        boundingBox(aabb)
+//                        geometry(0, RenderableManager.PrimitiveType.LINES, faceVertexBuffer, faceIndexBuffer, 0, 468)
+//                        material(0, materialInstance)
+//                    }
+//
+//                        //  val anchor = convertBoundingBoxToAnchors(session, updatedFrame, boundingBox)
+//                        val geometryNode = GeometryNode(
+//                            engine = engine,
+//                            geometry = shape.geometry,
+//                            materialInstance = materialInstance,
+//                            builderApply = renderableManager
+//                        )
+//
+//                        nodes.add(geometryNode)
+//
+//
+//                    }
+//
+//                    arViewModel.getBoundingBoxes(bitmap)
 
                 }
 
@@ -214,4 +219,48 @@ fun ARSceneView() {
 
 fun Context.showToastMessage(message: String) {
     Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+}
+
+fun createVertexBuffer(engine: Engine): VertexBuffer {
+    // Define vertex data (e.g., positions, normals, etc.)
+    val vertexData = floatArrayOf(
+        // Positions (x, y, z)
+        -1.0f, -1.0f, 0.0f,
+         1.0f, -1.0f, 0.0f,
+         1.0f,  1.0f, 0.0f,
+        -1.0f,  1.0f, 0.0f
+    )
+
+    // Create a ByteBuffer to hold the vertex data
+    val vertexBuffer = ByteBuffer.allocateDirect(vertexData.size * 4).order(ByteOrder.nativeOrder())
+    vertexBuffer.asFloatBuffer().put(vertexData)
+
+    // Create the VertexBuffer
+    return VertexBuffer.Builder()
+        .vertexCount(4)
+        .bufferCount(1)
+        .attribute(VertexBuffer.VertexAttribute.POSITION, 0, VertexBuffer.AttributeType.FLOAT3, 0, 12)
+        .build(engine).apply {
+            setBufferAt(engine, 0, vertexBuffer)
+        }
+}
+
+fun createIndexBuffer(engine: Engine): IndexBuffer {
+    // Define index data
+    val indexData = shortArrayOf(
+        0, 1, 2,
+        2, 3, 0
+    )
+
+    // Create a ByteBuffer to hold the index data
+    val indexBuffer = ByteBuffer.allocateDirect(indexData.size * 2).order(ByteOrder.nativeOrder())
+    indexBuffer.asShortBuffer().put(indexData)
+
+    // Create the IndexBuffer
+    return IndexBuffer.Builder()
+        .indexCount(6)
+        .bufferType(IndexBuffer.Builder.IndexType.USHORT)
+        .build(engine).apply {
+            setBuffer(engine, indexBuffer)
+        }
 }

@@ -177,6 +177,42 @@ fun convertBoundingBoxToARPoints(session: com.google.ar.core.Session, frame: Fra
     return null
 }
 
+fun createBoxFromBoundingBox(boundingBox: BoundingBox): Box {
+    val centerX = boundingBox.cx
+    val centerY = boundingBox.cy
+    val centerZ = 0.0f // Assuming a 2D bounding box, set Z to 0 or any appropriate value
+
+    val halfExtentX = boundingBox.w / 2
+    val halfExtentY = boundingBox.h / 2
+    val halfExtentZ = 0.0f // Assuming a 2D bounding box, set Z to 0 or any appropriate value
+
+    return Box(centerX, centerY, centerZ, halfExtentX, halfExtentY, halfExtentZ)
+}
+
+fun convertBoundingBoxToAnchors(session: com.google.ar.core.Session, frame: Frame, boundingBox: BoundingBox): List<Anchor> {
+    val anchors = mutableListOf<Anchor>()
+
+    // List of points in the bounding box
+    val points = listOf(
+        floatArrayOf(boundingBox.x1, boundingBox.y1), // top-left
+        floatArrayOf(boundingBox.x2, boundingBox.y1), // top-right
+        floatArrayOf(boundingBox.x1, boundingBox.y2), // bottom-left
+        floatArrayOf(boundingBox.x2, boundingBox.y2), // bottom-right
+        floatArrayOf((boundingBox.x1 + boundingBox.x2) / 2, (boundingBox.y1 + boundingBox.y2) / 2) // center
+    )
+
+    // Convert each point to an Anchor
+    for (point in points) {
+        val hitResult = frame.hitTest(point[0], point[1])
+        if (hitResult.isNotEmpty()) {
+            val hitPose = hitResult[0].hitPose
+            val anchor = session.createAnchor(hitPose)
+            anchors.add(anchor)
+        }
+    }
+
+    return anchors
+}
 
 data class ARPoints(
     val corners: List<Anchor>,
